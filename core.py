@@ -1,64 +1,154 @@
-import os
-import shutil
-import datetime
+import logging
 
-from openpyxl import load_workbook
+import aiogram
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Text
+from dotenv import load_dotenv
+from telebot import types
+from telebot.types import ReplyKeyboardMarkup
+from botrequests.create_new_business_trip import initial_creating
+from botrequests.edit_business_trip import edit_current_business_trip
+from service import WorkDocuments
+from config import bot, dp, BusinessTripForm
+from database import Employee, BusinessTrip
+import asyncio
+from aiogram import Bot, Dispatcher, executor, types
 
-"""Запрос всех необходимых данных"""
-
-work_directory = "/home/biglove/Desktop/Работа/НИЦ/2023/Биглов/"
-new_business_trip = input("Введите город назначения: ")
-started_at = input("Введите дату начала командировки: ")
-ended_at = input("Введите дату окончания командировки: ")
-transfer_expenses = int(input("Средства на транспорт: "))
-representative_expenses = int(input("Представительские расходы: "))
-
-"""
-Создаем директории. Если город посещается первый раз - создается папка с названием города, а внутри папка с датами
-командировки. Если визит повторный - создается в существующей папке директория с диапазоном дат.
-"""
-
-os.mkdir(work_directory + new_business_trip + f'/{started_at}-{ended_at}')
-current_path = work_directory + new_business_trip + f'/{started_at}-{ended_at}'  # Директория по новой командировке
-
-"""Копируем нужные файлы в новую директорию"""
-os.rename(shutil.copy(work_directory + '/Для бухгалтерии.xlsx', current_path),
-          current_path + f'/Для бухгалтерии-{new_business_trip}-{started_at}-{ended_at}.xlsx')
-
-os.rename(shutil.copy(work_directory + '/Авансовый отчет.xlsx', current_path),
-          current_path + f'/Авансовый отчет-{new_business_trip}-{started_at}-{ended_at}.xlsx')
-
-os.rename(shutil.copy(work_directory + '/План-отчет.xlsx', current_path),
-          current_path + f'/План-отчет-{new_business_trip}-{started_at}-{ended_at}.xlsx')
-
-"""ВЫчисляем продолжительность командировки"""
-start_date = datetime.datetime.strptime(started_at, '%d.%m.%Y')
-end_date = datetime.datetime.strptime(ended_at, '%d.%m.%Y')
-duration_of_business_trip = end_date - start_date
-
-"""Открываем файл 'Для бухгалтерии' и пишем туда введенные данные"""
-fn = f'{current_path}/Для бухгалтерии-{new_business_trip}-{started_at}-{ended_at}.xlsx'
-wb = load_workbook(fn)
-ws = wb['Лист1']
-
-ws['D2'] = duration_of_business_trip.days + 1
-ws['A2'] = f'{started_at}-{ended_at}'
-ws['B2'] = new_business_trip
-ws['E3'] = transfer_expenses
-ws['E4'] = representative_expenses
-wb.save(fn)
-wb.close()
+load_dotenv()
 
 
-"""Открываем файл 'Авансовый отчет' и пишем туда введенные данные"""
-fn1 = f'{current_path}/Авансовый отчет-{new_business_trip}-{started_at}-{ended_at}.xlsx'
-wb1 = load_workbook(fn1)
-ws1 = wb1['Лист1']
+@dp.message_handler(commands=['start'])
+async def start_message(message: aiogram.types.Message) -> None:
+    """
+    Стартовая функция при запуске бота
+    :param
+        message: telebot.types.Message
+        return: None
+    """
+    current_user_telegram_id = Employee.get_employee(telegram_id=message.from_user.id).telegram_id
+    print(message.from_user.id)
+    if message.chat.id != current_user_telegram_id:
+        await bot.send_message(message.chat.id, "Вы не зарегистрированы! Обратитесь к администратору @biglov_e!")
+    else:
+        await bot.send_message(message.chat.id,
+                               f"Здравствуйте, {Employee.get_employee(telegram_id=message.chat.id)}! "
+                               f"Выберите нужный пункт меню!")
 
-ws1['D2'] = 3
-ws1['A2'] = f'{started_at}-{ended_at}'
-ws1['B2'] = new_business_trip
-ws1['E3'] = transfer_expenses
-ws1['E4'] = representative_expenses
-wb1.save(fn1)
-wb1.close()
+
+@dp.message_handler(commands=['plan_report'])
+async def plan_report_message(message: aiogram.types.Message) -> None:
+    """
+    Функция для получения формы плана-отчета.
+
+    :param message: telebot.types.Message
+    :return: None
+    """
+
+    current_user_telegram_id = Employee.get_employee(telegram_id=message.from_user.id).telegram_id
+
+    if message.chat.id != current_user_telegram_id:
+        await bot.send_message(message.chat.id, "Вы не зарегистрированы! Обратитесь к администратору @biglov_e!")
+    else:
+
+        current_employee = Employee.get_employee(message.from_user.id)
+        current_business_trip = BusinessTrip.get_current_business_trip(current_employee.id)
+
+        file = WorkDocuments.post_trip_report(
+            current_employee.last_name,
+            current_business_trip.city,
+            current_business_trip.first_date,
+            current_business_trip.last_date
+        )
+
+        doc_file = open(file, 'rb')
+        await bot.send_document(message.chat.id, doc_file)
+
+
+@dp.message_handler(commands=['for_accounting'])
+async def for_accounting_message(message: aiogram.types.Message) -> None:
+    """
+    Функция для получения заполненного файла для бухгалтерии при подготовке новой командировки.
+
+    :param message: telebot.types.Message
+    :return: None
+    """
+
+    current_user_telegram_id = Employee.get_employee(telegram_id=message.from_user.id).telegram_id
+
+    if message.chat.id != current_user_telegram_id:
+        await bot.send_message(message.chat.id, "Вы не зарегистрированы! Обратитесь к администратору @biglov_e!")
+    else:
+        current_employee = Employee.get_employee(message.from_user.id)
+        current_business_trip = BusinessTrip.get_current_business_trip(current_employee.id)
+
+        file = WorkDocuments.for_accounting(
+            current_employee.last_name,
+            current_business_trip.city,
+            current_business_trip.first_date,
+            current_business_trip.last_date,
+            current_business_trip.transfer,
+            current_business_trip.representative
+        )
+
+        doc_file = open(file, 'rb')
+        await bot.send_document(message.chat.id, doc_file)
+
+
+@dp.message_handler(commands=['accounting_report'])
+async def accounting_report_message(message: aiogram.types.Message) -> None:
+    """
+    Функция для получения Авансового отчета по возвращении из командировки.
+
+    :param message: telebot.types.Message
+    :return: None
+    """
+
+    current_user_telegram_id = Employee.get_employee(telegram_id=message.from_user.id).telegram_id
+
+    if message.chat.id != current_user_telegram_id:
+        await bot.send_message(message.chat.id, "Вы не зарегистрированы! Обратитесь к администратору @biglov_e!")
+    else:
+        current_employee = Employee.get_employee(message.from_user.id)
+        current_business_trip = BusinessTrip.get_current_business_trip(current_employee.id)
+        file = WorkDocuments.accounting_report(
+            current_employee.last_name,
+            f"{current_employee.last_name} {current_employee.name} {current_employee.middle_name}",
+            current_business_trip.city,
+            current_business_trip.first_date,
+            current_business_trip.last_date,
+            current_business_trip.transfer,
+            current_business_trip.representative
+        )
+
+        doc_file = open(file, 'rb')
+        await bot.send_document(message.chat.id, doc_file)
+
+
+@dp.message_handler(commands=['create_new_business_trip'])
+async def create_new_business_trip(message: aiogram.types.Message) -> None:
+    """
+    Функция для создания нововй командировки.
+
+    :param message: telebot.types.Message
+    :return: None
+    """
+
+    employee_id = Employee.get_employee(message.from_user.id).id
+    current_business_trip = BusinessTrip.get_current_business_trip(employee_id)
+    current_user_telegram_id = Employee.get_employee(telegram_id=message.from_user.id).telegram_id
+
+    if message.chat.id != current_user_telegram_id:
+        await bot.send_message(message.chat.id, "Вы не зарегистрированы! Обратитесь к администратору @biglov_e!")
+    elif current_business_trip.is_active:
+        await bot.send_message(
+            message.chat.id,
+            f"У Вас есть незакрытая командировка {current_business_trip}",
+        )
+        await edit_current_business_trip(message)
+    else:
+        await BusinessTripForm.city.set()
+        await initial_creating(message)
+
+
+if __name__ == "__main__":
+    executor.start_polling(dp)
