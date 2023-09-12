@@ -10,12 +10,12 @@ from database import BusinessTrip, Employee, session
 
 @dp.message_handler(state='*', commands='cancel')
 @dp.message_handler(Text(equals='cancel', ignore_case=True), state='*')
-async def cancel_handler(message: types.Message, state: FSMContext):
+async def cancel_handler(message: types.Message, state: FSMContext) -> None:
     """
     Функция для выхода из текущего состояния
     :param message:
     :param state:
-    :return:
+    :return: None
     """
 
     current_state = await state.get_state()
@@ -35,12 +35,12 @@ async def initial_creating(message) -> None:
 
 
 @dp.message_handler(state=BusinessTripForm.city)
-async def process_city(message: types.Message, state: FSMContext):
+async def process_city(message: types.Message, state: FSMContext) -> None:
     """
 
     :param message:
     :param state:
-    :return:
+    :return: None
     """
 
     async with state.proxy() as data:
@@ -50,12 +50,12 @@ async def process_city(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state=BusinessTripForm.first_date)
-async def process_first_date(message: types.Message, state: FSMContext):
+async def process_first_date(message: types.Message, state: FSMContext) -> None:
     """
 
     :param message:
     :param state:
-    :return:
+    :return: None
     """
 
     async with state.proxy() as data:
@@ -65,12 +65,12 @@ async def process_first_date(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state=BusinessTripForm.last_date)
-async def process_last_date(message: types.Message, state: FSMContext):
+async def process_last_date(message: types.Message, state: FSMContext) -> None:
     """
 
     :param message:
     :param state:
-    :return:
+    :return: None
     """
 
     async with state.proxy() as data:
@@ -80,12 +80,12 @@ async def process_last_date(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state=BusinessTripForm.transfer_expenses)
-async def process_transfer_expenses(message: types.Message, state: FSMContext):
+async def process_transfer_expenses(message: types.Message, state: FSMContext) -> None:
     """
 
     :param message:
     :param state:
-    :return:
+    :return: None
     """
 
     async with state.proxy() as data:
@@ -95,12 +95,12 @@ async def process_transfer_expenses(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state=BusinessTripForm.representative_expenses)
-async def process_representative_expenses(message: types.Message, state: FSMContext):
+async def process_representative_expenses(message: types.Message, state: FSMContext) -> None:
     """
 
     :param message:
     :param state:
-    :return:
+    :return: None
     """
 
     async with state.proxy() as data:

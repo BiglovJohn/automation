@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Any
+
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 
@@ -22,20 +24,21 @@ class Employee(Base):
     last_name = Column('last_name', String(100), nullable=False)
     business_trip = relationship('BusinessTrip', backref="employee")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         :return (str): Возвращает полное ФИО сотрудника
         """
         return f'{self.last_name} {self.name} {self.middle_name}'
 
     @classmethod
-    def get_employee(cls, telegram_id):
+    def get_employee(cls, telegram_id: Any):
         """
         Получение пользователя по его Telegram ID
 
         :param telegram_id: Telegram ID пользователя (сотрудника)
-        :return: Текущего пользователя
+        :return database.Employee: Текущий пользователь
         """
+
         return session.query(Employee).filter(cls.telegram_id == telegram_id).first()
 
 
@@ -54,32 +57,33 @@ class BusinessTrip(Base):
     representative = Column('representative', Integer, nullable=False)
     is_active = Column(Boolean, unique=False, default=True)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.city}-{self.first_date}-{self.last_date}'
 
     @classmethod
-    def get_current_business_trip(cls, current_employee):
+    def get_current_business_trip(cls, current_employee: Any):
         """
         Получение текущей командировки
 
-        :param current_employee:
-        :return:
+        :param current_employee: Текущий сотрудник
+        :return database.Employee:
         """
+
         return session.query(BusinessTrip).filter(
             cls.employee_id == current_employee).order_by(BusinessTrip.id.desc()).first()
 
     @classmethod
-    def get_total_expenses(cls):
+    def get_total_expenses(cls) -> int:
         """
         Получение общей суммы по затратам на командировку
 
-        :return:
+        :return int: Общую сумму затрат
         """
         start_date = datetime.strptime(str(cls.first_date), '%d.%m.%Y')
         end_date = datetime.strptime(str(cls.last_date), '%d.%m.%Y')
         duration_of_business_trip = end_date - start_date
         total_expenses = cls.transfer + cls.representative + (duration_of_business_trip * 1000)
-        return total_expenses
+        return int(total_expenses)
 
 
 Base.metadata.create_all(bind=engine)

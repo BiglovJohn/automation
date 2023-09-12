@@ -14,12 +14,13 @@ load_dotenv()
 async def start_message(message: aiogram.types.Message) -> None:
     """
     Стартовая функция при запуске бота
+
     :param
         message: telebot.types.Message
         return: None
     """
     current_user_telegram_id = Employee.get_employee(telegram_id=message.from_user.id).telegram_id
-    print(message.from_user.id)
+
     if message.chat.id != current_user_telegram_id:
         await bot.send_message(message.chat.id, "Вы не зарегистрированы! Обратитесь к администратору @biglov_e!")
     else:
